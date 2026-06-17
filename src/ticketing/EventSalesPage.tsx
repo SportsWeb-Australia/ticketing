@@ -14,6 +14,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { BRAND } from './brand';
 import type { TkEvent, TkTicketType, TkQuote, CartItem, BuyerDetails } from './types';
 
 interface Props {
@@ -188,8 +189,8 @@ export default function EventSalesPage({ eventId, slug, clubId, embed = false }:
           cancel_url: window.location.href,
         }),
       });
-      if (!res.ok) throw new Error('Checkout is not available yet.');
-      const out = await res.json();
+      const out = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(out.error || 'Checkout is not available right now.');
       if (out.checkout_url) window.location.href = out.checkout_url;
       else if (out.order_id) window.location.href = `/tickets/confirm?order=${out.order_id}`;
       else throw new Error('Unexpected checkout response.');
@@ -249,7 +250,7 @@ export default function EventSalesPage({ eventId, slug, clubId, embed = false }:
 
   return (
     <div
-      className={`${embed ? '' : 'min-h-screen'} bg-slate-50 ${embed ? 'pb-6' : 'pb-32'} text-slate-900`}
+      className={`${embed ? '' : 'min-h-screen'} bg-slate-50 pb-8 text-slate-900`}
       style={{ ['--brand' as string]: brand }}
     >
       {!embed && (
@@ -385,18 +386,20 @@ export default function EventSalesPage({ eventId, slug, clubId, embed = false }:
           <p className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{formError}</p>
         )}
 
-        {/* embed mode: summary flows inline instead of a fixed bar */}
-        {embed && hasSelection && (
-          <div className="mt-5 rounded-xl bg-white p-4 shadow-sm">{Summary}</div>
+        {/* Order summary: in-flow + sticky. Sits under the form on desktop
+            (short content), sticks to the bottom while scrolling on mobile.
+            Full-bleed bar on phones, rounded card on larger screens. */}
+        {hasSelection && (
+          <div className="sticky bottom-0 z-20 -mx-4 mt-5 border-t border-slate-200 bg-white/95 px-4 py-3 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] backdrop-blur sm:mx-0 sm:rounded-2xl sm:border sm:px-5 sm:shadow-lg">
+            {Summary}
+          </div>
         )}
-      </main>
 
-      {/* full-page mode: sticky bottom summary */}
-      {!embed && hasSelection && (
-        <div className="fixed inset-x-0 bottom-0 border-t border-slate-200 bg-white/95 backdrop-blur">
-          <div className="mx-auto max-w-2xl px-4 py-3">{Summary}</div>
-        </div>
-      )}
+        <p className="mt-6 flex items-center justify-center gap-1.5 text-xs text-slate-400">
+          <img src={BRAND.icon} alt="" className="h-3.5 w-3.5 object-contain" />
+          Powered by {BRAND.name}
+        </p>
+      </main>
     </div>
   );
 }

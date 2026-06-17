@@ -1,31 +1,153 @@
-// Order confirmation — stub. The checkout step (tk-checkout + webhook) will
-// pass back an order id; this page will then load the order + issued tickets
-// and show the QR(s). For now it confirms the redirect target exists.
+// SportsWeb One — Ticketing — ConfirmPage
+// Post-purchase screen. Loads the order's issued tickets via the
+// tk_get_order_tickets RPC (anon-safe, keyed by the order UUID) and renders a
+// signed QR per ticket. Free orders have tickets immediately; paid orders are
+// issued by the webhook a moment after redirect, so we poll briefly.
 
 import { useEffect, useState } from 'react';
+import QRCode from 'react-qr-code';
 import { supabase } from '../lib/supabase';
+import { BRAND } from './brand';
+import BrandHeader from './BrandHeader';
+import BrandFooter from './BrandFooter';
+
+interface Ticket {
+  id: string;
+  serial_no: number;
+  type: string;
+  holder_name: string | null;
+  status: string;
+  qr: string;
+}
+interface OrderData {
+  found: boolean;
+  order_id?: string;
+  buyer_name?: string | null;
+  event?: {
+    name: string;
+    venue_name: string | null;
+    venue_address: string | null;
+    starts_at: string | null;
+    timezone: string;
+    brand_color: string | null;
+  };
+  tickets?: Ticket[];
+}
+
+const MAX_TRIES = 6;
 
 export default function ConfirmPage() {
   const orderId = new URLSearchParams(window.location.search).get('order');
-  const [msg, setMsg] = useState('Finalising your tickets…');
+  const [data, setData] = useState<OrderData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [tries, setTries] = useState(0);
 
   useEffect(() => {
     if (!orderId) {
-      setMsg('Thanks! Your tickets are on the way to your email.');
+      setLoading(false);
       return;
     }
-    // Placeholder: once tk_tickets are issued by the webhook, load + render QRs.
-    void supabase;
-    setMsg('Thanks! Your tickets are confirmed and on the way to your email.');
-  }, [orderId]);
+    let cancelled = false;
+    (async () => {
+      const { data: res } = await supabase.rpc('tk_get_order_tickets', {
+        p_order_id: orderId,
+      });
+      if (cancelled) return;
+      const ok = res?.found && (res.tickets?.length ?? 0) > 0;
+      if (ok) {
+        setData(res);
+        setLoading(false);
+      } else if (tries < MAX_TRIES) {
+        setTimeout(() => setTries((t) => t + 1), 1500); // wait for the webhook
+      } else {
+        setData(res ?? { found: false });
+        setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [orderId, tries]);
+
+  const accent = data?.event?.brand_color || BRAND.colors.orange;
+
+  const dateLabel = data?.event?.starts_at
+    ? new Intl.DateTimeFormat('en-AU', {
+        weekday: 'short',
+        day: 'numeric',
+        month: 'short',
+        hour: 'numeric',
+        minute: '2-digit',
+        timeZone: data.event.timezone,
+      }).format(new Date(data.event.starts_at))
+    : null;
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center px-6 text-center">
-      <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-2xl">
-        ✓
-      </div>
-      <h1 className="text-xl font-semibold">You're in</h1>
-      <p className="mt-2 text-slate-600">{msg}</p>
+    <div className="flex min-h-screen flex-col bg-brand-mist">
+      <BrandHeader />
+
+      <main className="mx-auto w-full max-w-xl flex-1 px-4 py-8">
+        {loading ? (
+          <p className="py-16 text-center text-slate-500">Finalising your tickets…</p>
+        ) : !orderId || !data?.found || !(data.tickets && data.tickets.length) ? (
+          <div className="py-16 text-center">
+            <h1 className="text-xl font-semibold text-brand-graphite">
+              We couldn&rsquo;t find those tickets
+            </h1>
+            <p className="mt-2 text-slate-500">
+              If you&rsquo;ve just paid, give it a few seconds and refresh &mdash;
+              your tickets are being issued.
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="text-center">
+              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-2xl">
+                &#10003;
+              </div>
+              <h1 className="text-2xl font-bold text-brand-graphite">You&rsquo;re in</h1>
+              <p className="mt-1 text-slate-600">
+                {data.event?.name}
+                {dateLabel ? ` \u00b7 ${dateLabel}` : ''}
+              </p>
+              {data.event?.venue_name && (
+                <p className="text-sm text-slate-500">{data.event.venue_name}</p>
+              )}
+            </div>
+
+            <p className="mt-5 rounded-lg bg-white px-4 py-3 text-center text-sm text-slate-600 shadow-sm">
+              Save or screenshot this screen and show the QR at the gate.
+            </p>
+
+            <div className="mt-5 space-y-4">
+              {data.tickets.map((t) => (
+                <div key={t.id} className="overflow-hidden rounded-2xl bg-white shadow-sm">
+                  <div className="h-1.5 w-full" style={{ backgroundColor: accent }} />
+                  <div className="flex items-center gap-4 p-5">
+                    <div className="shrink-0 rounded-lg bg-white p-1">
+                      <QRCode value={t.qr} size={104} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-brand-graphite">{t.type}</p>
+                      {t.holder_name && (
+                        <p className="text-sm text-slate-600">{t.holder_name}</p>
+                      )}
+                      <p className="mt-1 font-mono text-xs text-slate-400">
+                        #{String(t.serial_no).padStart(4, '0')}
+                      </p>
+                      {t.status !== 'valid' && (
+                        <p className="mt-1 text-xs font-medium text-amber-600">{t.status}</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </main>
+
+      <BrandFooter />
     </div>
   );
 }

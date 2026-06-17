@@ -3,6 +3,10 @@ import { Routes, Route, useParams, useSearchParams } from 'react-router-dom';
 import EventSalesPage from './ticketing/EventSalesPage';
 import ConfirmPage from './ticketing/ConfirmPage';
 import Landing from './ticketing/Landing';
+import ScannerHome from './scanner/ScannerHome';
+import ScanEvent from './scanner/ScanEvent';
+import EventsList from './admin/EventsList';
+import EventEditor from './admin/EventEditor';
 import { resolveClubIdBySlug } from './lib/club';
 
 // /e/:eventId — works with zero assumptions about the clubs table.
@@ -22,19 +26,12 @@ function EventBySlug() {
     let on = true;
     (async () => {
       const id = clubSlug ? await resolveClubIdBySlug(clubSlug) : null;
-      if (on) {
-        setClubId(id);
-        setReady(true);
-      }
+      if (on) { setClubId(id); setReady(true); }
     })();
-    return () => {
-      on = false;
-    };
+    return () => { on = false; };
   }, [clubSlug]);
   if (!ready) return <div className="mx-auto max-w-2xl p-6 text-slate-500">Loading…</div>;
-  return (
-    <EventSalesPage slug={eventSlug} clubId={clubId ?? undefined} embed={sp.get('embed') === '1'} />
-  );
+  return <EventSalesPage slug={eventSlug} clubId={clubId ?? undefined} embed={sp.get('embed') === '1'} />;
 }
 
 export default function App() {
@@ -44,6 +41,15 @@ export default function App() {
       <Route path="/e/:eventId" element={<EventById />} />
       <Route path="/:clubSlug/e/:eventSlug" element={<EventBySlug />} />
       <Route path="/tickets/confirm" element={<ConfirmPage />} />
+
+      {/* gate scanner (installable PWA) */}
+      <Route path="/scan" element={<ScannerHome />} />
+      <Route path="/scan/:eventId" element={<ScanEvent />} />
+
+      {/* club admin */}
+      <Route path="/admin" element={<EventsList />} />
+      <Route path="/admin/new" element={<EventEditor />} />
+      <Route path="/admin/e/:eventId" element={<EventEditor />} />
     </Routes>
   );
 }
