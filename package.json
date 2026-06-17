@@ -6,7 +6,8 @@
   "description": "SportsWeb One — Ticketing module (standalone app, connected to SportsWeb One via shared Supabase)",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit",
     "preview": "vite preview"
   },
   "dependencies": {
