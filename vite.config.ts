@@ -7,7 +7,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['ticket-one-icon.png'],
+      includeAssets: ['brand/ticket-one-icon.png'],
       manifest: {
         name: 'Ticket One — Scan',
         short_name: 'Scan',
@@ -17,9 +17,9 @@ export default defineConfig({
         display: 'standalone',
         start_url: '/scan',
         icons: [
-          { src: '/ticket-one-icon.png', sizes: '192x192', type: 'image/png' },
-          { src: '/ticket-one-icon.png', sizes: '512x512', type: 'image/png' },
-          { src: '/ticket-one-icon.png', sizes: 'any', type: 'image/png', purpose: 'maskable' },
+          { src: '/brand/ticket-one-icon.png', sizes: '192x192', type: 'image/png' },
+          { src: '/brand/ticket-one-icon.png', sizes: '512x512', type: 'image/png' },
+          { src: '/brand/ticket-one-icon.png', sizes: 'any', type: 'image/png', purpose: 'maskable' },
         ],
       },
     }),

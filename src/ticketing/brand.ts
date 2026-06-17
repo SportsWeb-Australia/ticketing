@@ -3,9 +3,9 @@
 export const BRAND = {
   name: 'Ticket One',
   tagline: 'Sell. Scan. Simplify.',
-  logoHorizontal: '/ticket-one-horizontal.png', // header, light backgrounds
-  logoWhite: '/ticket-one-white.png',           // footer, dark backgrounds
-  icon: '/ticket-one-icon.png',                 // favicon + small marks
+  logoHorizontal: '/brand/ticket-one-horizontal.png', // header, light backgrounds
+  logoWhite: '/brand/ticket-one-white.png',           // footer, dark backgrounds
+  icon: '/brand/ticket-one-icon.png',                 // favicon + small marks
   colors: {
     graphite: '#11161D',
     orange: '#FF6A00',
