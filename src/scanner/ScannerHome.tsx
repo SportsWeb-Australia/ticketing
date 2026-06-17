@@ -33,7 +33,7 @@ export default function ScannerHome() {
   return (
     <Screen>
       <div className="flex w-full items-center justify-between">
-        <img src={BRAND.logoWhite} alt={BRAND.name} className="h-7 w-auto object-contain" />
+        <img src={BRAND.logoStackedWhite} alt={BRAND.name} className="h-7 w-auto object-contain" />
         <button onClick={() => supabase.auth.signOut()} className="text-sm text-white/50">
           Sign out
         </button>

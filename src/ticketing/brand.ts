@@ -1,13 +1,11 @@
-// Ticket One brand tokens. Logo paths point at files in /public/brand.
-// If your filenames differ, change them here once.
+// Ticket One brand tokens. Logo paths point at transparent PNGs in /public/brand.
 export const BRAND = {
   name: 'Ticket One',
   tagline: 'Sell. Scan. Simplify.',
-  logoHorizontal: '/brand/ticket-one-horizontal.png',        // header, light bg (has "Powered by SportsWeb One")
-  logoStacked: '/brand/ticket-one-stacked.png',              // HERO, light bg — large
-  logoStackedWhite: '/brand/ticket-one-stacked-white.png',   // footer, dark bg
-  logoWhite: '/brand/ticket-one-white.png',                  // legacy horizontal white
-  icon: '/brand/ticket-one-icon.png',                        // favicon + small marks
+  logoHorizontal: '/brand/ticket-one-head.png',       // header (transparent)
+  logoStacked: '/brand/ticket-one-hero.png',          // HERO, big (transparent)
+  logoStackedWhite: '/brand/ticket-one-foot-white.png', // footer, dark bg (transparent)
+  icon: '/brand/ticket-one-icon.png',                 // favicon + PWA (emblem, transparent)
   colors: {
     graphite: '#11161D',
     orange: '#FF6A00',

@@ -17,7 +17,7 @@ export default function Login() {
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-brand-graphite px-6">
-      <img src={BRAND.logoWhite} alt={BRAND.name} className="mb-8 h-10 w-auto object-contain" />
+      <img src={BRAND.logoStackedWhite} alt={BRAND.name} className="mb-8 h-10 w-auto object-contain" />
       <div className="w-full max-w-sm space-y-3">
         <input
           className="w-full rounded-lg border border-white/15 bg-white/5 px-3 py-3 text-white placeholder-white/40 outline-none focus:border-brand-orange"
