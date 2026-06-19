@@ -7,7 +7,7 @@ import { useSession } from './useSession';
 import Login from './Login';
 import { enqueue, loadQueue, saveQueue } from './scanQueue';
 
-type Result = 'admitted' | 'duplicate' | 'invalid' | 'invalid_sig' | 'wrong_event' | 'void' | 'refunded' | 'not_found' | 'queued';
+type Result = 'admitted' | 'duplicate' | 'invalid' | 'invalid_sig' | 'wrong_event' | 'void' | 'refunded' | 'not_found' | 'queued' | 'retry';
 
 interface ScanOutcome {
   result: Result;
@@ -132,7 +132,9 @@ export default function ScanEvent() {
     const { data, error } = await supabase.rpc('tk_scan_ticket', {
       p_qr: code, p_gate: gate || null, p_device: DEVICE_ID,
     });
-    if (error) { enqueue({ qr: code, gate: gate || null, ts: now }); flash({ result: 'queued' }); return; }
+    // While online, a failed call must NOT look like an admit. Tell staff to
+    // rescan rather than waving the patron through on an unverified result.
+    if (error) { flash({ result: 'retry', message: error.message }); return; }
     flash(data as ScanOutcome);
     if ((data as ScanOutcome).result === 'admitted') loadManifest();
   };
@@ -162,7 +164,8 @@ export default function ScanEvent() {
   const bg =
     outcome == null ? '' :
     GOOD.includes(outcome.result) ? 'bg-emerald-500' :
-    outcome.result === 'duplicate' ? 'bg-amber-500' : 'bg-red-600';
+    outcome.result === 'duplicate' ? 'bg-amber-500' :
+    outcome.result === 'retry' ? 'bg-slate-600' : 'bg-red-600';
 
   return (
     <div className="min-h-screen bg-brand-graphite text-white">
@@ -202,11 +205,13 @@ export default function ScanEvent() {
             <p className="text-3xl font-extrabold uppercase tracking-wide">
               {GOOD.includes(outcome.result) ? 'Admit' :
                outcome.result === 'duplicate' ? 'Already in' :
+               outcome.result === 'retry' ? 'Try again' :
                outcome.result === 'void' ? 'Void' :
                outcome.result === 'refunded' ? 'Refunded' :
                outcome.result === 'not_found' ? 'Not found' : 'Invalid'}
             </p>
             {outcome.result === 'queued' && <p className="mt-1 text-sm">Saved — will sync</p>}
+            {outcome.result === 'retry' && <p className="mt-1 text-sm">Couldn’t verify — scan again</p>}
             {outcome.ticket && (
               <p className="mt-2 text-lg">
                 {outcome.ticket.type} · #{String(outcome.ticket.serial_no).padStart(4, '0')}

@@ -89,6 +89,30 @@ function Inner({ clubId }: { clubId: string }) {
           </Link>
         ))}
       </div>
+
+      {!loading && <EmbedCard clubId={clubId} />}
+    </div>
+  );
+}
+
+/* Embed-all-events snippet — drop this on the club website / SportsWeb One.
+   Auto-updates: past events fall off, new published events appear, no edits. */
+function EmbedCard({ clubId }: { clubId: string }) {
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  const snippet = `<iframe src="${origin}/embed/${clubId}?embed=1" style="width:100%;border:0;min-height:240px" title="Upcoming events"></iframe>`;
+  const copy = () => navigator.clipboard?.writeText(snippet);
+  return (
+    <div className="mt-8 rounded-xl border border-slate-200 bg-white p-5">
+      <h2 className="font-semibold text-slate-800">Embed all events on your website</h2>
+      <p className="mt-1 text-sm text-slate-500">
+        One code for your club. It lists every published event and updates itself —
+        finished events drop off automatically. Open it standalone:{' '}
+        <a href={`/embed/${clubId}`} target="_blank" rel="noreferrer" className="text-brand-orange underline">preview</a>.
+      </p>
+      <div className="mt-3 flex gap-2">
+        <input readOnly value={snippet} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-500 outline-none" />
+        <button onClick={copy} className="shrink-0 rounded-lg border border-slate-300 px-3 text-sm">Copy</button>
+      </div>
     </div>
   );
 }

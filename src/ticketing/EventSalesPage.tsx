@@ -14,6 +14,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { renderMarkdown } from '../lib/markdown';
 import { BRAND } from './brand';
 import type { TkEvent, TkTicketType, TkQuote, CartItem, BuyerDetails } from './types';
 
@@ -38,6 +39,8 @@ export default function EventSalesPage({ eventId, slug, clubId, embed = false }:
   const [types, setTypes] = useState<TkTicketType[]>([]);
   const [cart, setCart] = useState<Record<string, number>>({});
   const [buyer, setBuyer] = useState<BuyerDetails>({ name: '', email: '', phone: '' });
+  const [first, setFirst] = useState('');
+  const [last, setLast] = useState('');
   const [quote, setQuote] = useState<TkQuote | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -164,7 +167,8 @@ export default function EventSalesPage({ eventId, slug, clubId, embed = false }:
   const canSubmit =
     hasSelection &&
     !!quote &&
-    buyer.name.trim().length > 1 &&
+    first.trim().length > 0 &&
+    last.trim().length > 0 &&
     emailOk(buyer.email) &&
     !submitting &&
     !quoting;
@@ -299,10 +303,25 @@ export default function EventSalesPage({ eventId, slug, clubId, embed = false }:
               </p>
             )}
           </div>
+          {(event.venue_address || event.venue_name) && (
+            <div className="mt-3 overflow-hidden rounded-xl border border-slate-200">
+              <iframe
+                title="Venue map"
+                src={`https://www.google.com/maps?q=${encodeURIComponent(
+                  (event.venue_address || event.venue_name) as string,
+                )}&output=embed`}
+                className="h-44 w-full"
+                style={{ border: 0 }}
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+              />
+            </div>
+          )}
           {event.description && (
-            <p className="mt-4 whitespace-pre-line text-sm leading-relaxed text-slate-700">
-              {event.description}
-            </p>
+            <div
+              className="mt-4 space-y-3 text-sm leading-relaxed text-slate-700"
+              dangerouslySetInnerHTML={{ __html: renderMarkdown(event.description) }}
+            />
           )}
         </div>
 
@@ -372,12 +391,30 @@ export default function EventSalesPage({ eventId, slug, clubId, embed = false }:
               Your details
             </h2>
             <div className="mt-3 grid gap-3">
+            <div className="grid grid-cols-2 gap-3">
               <input
                 className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[var(--brand)] focus:ring-2 focus:ring-[var(--brand)]/20"
-                placeholder="Full name"
-                value={buyer.name}
-                onChange={(e) => setBuyer({ ...buyer, name: e.target.value })}
+                placeholder="First name"
+                autoComplete="given-name"
+                value={first}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setFirst(v);
+                  setBuyer((b) => ({ ...b, name: `${v} ${last}`.trim() }));
+                }}
               />
+              <input
+                className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[var(--brand)] focus:ring-2 focus:ring-[var(--brand)]/20"
+                placeholder="Last name"
+                autoComplete="family-name"
+                value={last}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setLast(v);
+                  setBuyer((b) => ({ ...b, name: `${first} ${v}`.trim() }));
+                }}
+              />
+            </div>
               <input
                 className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-[var(--brand)] focus:ring-2 focus:ring-[var(--brand)]/20"
                 placeholder="Email (your tickets are sent here)"

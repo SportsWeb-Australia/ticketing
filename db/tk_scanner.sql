@@ -21,7 +21,7 @@ create or replace function tk_scan_ticket(
 ) returns jsonb
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 declare
     v_parts    text[];

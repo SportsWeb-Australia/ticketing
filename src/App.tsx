@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Routes, Route, useParams, useSearchParams } from 'react-router-dom';
 import EventSalesPage from './ticketing/EventSalesPage';
 import ConfirmPage from './ticketing/ConfirmPage';
+import ClubEmbed from './ticketing/ClubEmbed';
 import Landing from './ticketing/Landing';
 import ScannerHome from './scanner/ScannerHome';
 import ScanEvent from './scanner/ScanEvent';
@@ -39,6 +40,7 @@ export default function App() {
     <Routes>
       <Route path="/" element={<Landing />} />
       <Route path="/e/:eventId" element={<EventById />} />
+      <Route path="/embed/:clubId" element={<ClubEmbed />} />
       <Route path="/:clubSlug/e/:eventSlug" element={<EventBySlug />} />
       <Route path="/tickets/confirm" element={<ConfirmPage />} />
 

@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
+import type { ChangeEvent, ReactNode } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import QRCode from 'react-qr-code';
 import { supabase } from '../lib/supabase';
+import { renderMarkdown } from '../lib/markdown';
+import VenueField from './VenueField';
 import AdminShell, { RequireAdmin } from './AdminShell';
 
 const TAB_LABELS: Record<Tab, string> = {
@@ -165,13 +167,13 @@ function Inner({ clubId }: { clubId: string }) {
         <button onClick={() => nav('/admin')} className="text-sm text-slate-400">‹ Events</button>
         <div className="flex items-center gap-3">
           {msg && <span className="text-sm text-slate-500">{msg}</span>}
-          {!isNew && status !== 'published' && (
+          {status !== 'published' && (
             <button onClick={() => save('published')} disabled={saving || !name.trim()}
               className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40">
               {saving ? 'Working…' : 'Publish'}
             </button>
           )}
-          {!isNew && status === 'published' && (
+          {status === 'published' && (
             <button onClick={() => save('draft')} disabled={saving}
               className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-600 disabled:opacity-40">
               Unpublish
@@ -199,10 +201,25 @@ function Inner({ clubId }: { clubId: string }) {
             <input value={name} onChange={(e) => { setName(e.target.value); if (isNew) setSlug(slugify(e.target.value)); }} className={inp} placeholder="Twilight T20 Final" />
           </Field>
           <Field label="URL slug"><input value={slug} onChange={(e) => setSlug(slugify(e.target.value))} className={inp} /></Field>
-          <Field label="Description"><textarea value={description} onChange={(e) => setDescription(e.target.value)} className={`${inp} h-24`} /></Field>
+          <Field label="Description">
+            <textarea value={description} onChange={(e) => setDescription(e.target.value)} className={`${inp} h-32`} />
+            <p className="mt-1 text-xs text-slate-400">
+              Formatting: <code>**bold**</code>, <code>*italic*</code>, <code>[link](https://…)</code>, <code>- bullet</code>, <code># heading</code>.
+            </p>
+            {description.trim() && (
+              <div className="mt-2 rounded-lg border border-slate-200 bg-brand-mist p-3">
+                <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-slate-400">Preview</p>
+                <div className="space-y-2 text-sm leading-relaxed text-slate-700"
+                  dangerouslySetInnerHTML={{ __html: renderMarkdown(description) }} />
+              </div>
+            )}
+          </Field>
+          <VenueField
+            venueName={venueName} venueAddress={venueAddress}
+            setVenueName={setVenueName} setVenueAddress={setVenueAddress}
+            inputClass={inp}
+          />
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Venue name"><input value={venueName} onChange={(e) => setVenueName(e.target.value)} className={inp} /></Field>
-            <Field label="Venue address"><input value={venueAddress} onChange={(e) => setVenueAddress(e.target.value)} className={inp} /></Field>
             <Field label="Starts"><input type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} className={inp} /></Field>
             <Field label="Ends"><input type="datetime-local" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} className={inp} /></Field>
             <Field label="Capacity (blank = unlimited)"><input value={capacity} onChange={(e) => setCapacity(e.target.value.replace(/\D/g, ''))} className={inp} /></Field>
@@ -261,7 +278,7 @@ function Inner({ clubId }: { clubId: string }) {
               <input value={brandColor} onChange={(e) => setBrandColor(e.target.value)} className={inp} />
             </div>
           </Field>
-          <Field label="Logo URL (shown on ticket + page)"><input value={logoUrl} onChange={(e) => setLogoUrl(e.target.value)} className={inp} placeholder="https://…/club-logo.png" /></Field>
+          <LogoUpload clubId={clubId} logoUrl={logoUrl} setLogoUrl={setLogoUrl} />
           <p className="text-xs text-slate-400">Leave the colour as your club’s primary colour for white-label tickets.</p>
         </Card>
       )}
@@ -423,6 +440,50 @@ function Report({ eventId, clubId, slug, name }: { eventId: string; clubId: stri
           <button onClick={() => copy(embed)} className="rounded-lg border border-slate-300 px-3 text-sm">Copy</button>
         </div>
       </Card>
+    </div>
+  );
+}
+
+/* ---------------- logo upload ---------------- */
+function LogoUpload({ clubId, logoUrl, setLogoUrl }: { clubId: string; logoUrl: string; setLogoUrl: (v: string) => void }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const onFile = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-selecting the same file
+    if (!file) return;
+    if (!/^image\//.test(file.type)) { setErr('Please choose an image file.'); return; }
+    if (file.size > 3 * 1024 * 1024) { setErr('Image must be under 3 MB.'); return; }
+    setBusy(true); setErr(null);
+    const ext = (file.name.split('.').pop() || 'png').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const path = `${clubId}/${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from('tk-logos').upload(path, file, { upsert: true, contentType: file.type });
+    if (error) {
+      setErr(/bucket not found/i.test(error.message) ? 'Storage not set up yet — run the tk-logos bucket SQL.' : error.message);
+      setBusy(false);
+      return;
+    }
+    const { data } = supabase.storage.from('tk-logos').getPublicUrl(path);
+    setLogoUrl(data.publicUrl);
+    setBusy(false);
+  };
+
+  return (
+    <div>
+      <span className="mb-1 block text-xs font-medium text-slate-500">Logo (shown on ticket + page)</span>
+      {logoUrl && (
+        <img src={logoUrl} alt="" className="mb-2 h-16 w-16 rounded-lg border border-slate-200 bg-white object-contain p-1" />
+      )}
+      <div className="flex items-center gap-3">
+        <label className="cursor-pointer rounded-lg border border-slate-300 px-3 py-2 text-sm hover:border-brand-orange">
+          {busy ? 'Uploading…' : logoUrl ? 'Replace logo' : 'Upload logo'}
+          <input type="file" accept="image/*" className="hidden" onChange={onFile} disabled={busy} />
+        </label>
+        {logoUrl && <button onClick={() => setLogoUrl('')} className="text-sm text-red-500">Remove</button>}
+      </div>
+      <input value={logoUrl} onChange={(e) => setLogoUrl(e.target.value)} className={`${inp} mt-2`} placeholder="…or paste an image URL" />
+      {err && <p className="mt-1 text-sm text-red-500">{err}</p>}
     </div>
   );
 }

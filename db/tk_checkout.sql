@@ -139,7 +139,7 @@ create or replace function tk_issue_tickets(p_order_id uuid)
 returns void
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 declare
     o         tk_orders%rowtype;
@@ -170,11 +170,12 @@ begin
 
             insert into tk_tickets
                 (id, order_id, event_id, club_id, ticket_type_id,
-                 serial_no, signature, status)
+                 serial_no, signature, holder_name, status)
             values
                 (v_tid, p_order_id, o.event_id, o.club_id, it.ticket_type_id,
                  v_next,
                  encode(hmac(v_tid::text || '.' || o.event_id::text, v_secret, 'sha256'), 'hex'),
+                 o.buyer_name,
                  'valid');
         end loop;
 
