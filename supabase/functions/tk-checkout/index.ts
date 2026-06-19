@@ -39,6 +39,34 @@ function json(body: unknown, status = 200) {
   });
 }
 
+// Send the buyer their ticket link via the shared SportsWeb One notify
+// endpoint (ZeptoMail under the hood). Best-effort — never blocks issuing.
+async function sendTicketEmail(opts: {
+  clubId: string; to: string; eventName: string; clubName: string; confirmUrl: string;
+}) {
+  const secret = Deno.env.get('VM_WEBHOOK_SECRET');
+  if (!secret || !opts.to) return;
+  try {
+    await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/notify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-webhook-secret': secret },
+      body: JSON.stringify({
+        club_id: opts.clubId,
+        channel: 'email',
+        to: opts.to,
+        subject: `Your tickets — ${opts.eventName}`,
+        body:
+          `Thanks for your order with ${opts.clubName}.\n\n` +
+          `Your tickets for ${opts.eventName} are ready. Open this link on your phone ` +
+          `and show the QR code at the gate:\n\n${opts.confirmUrl}\n\nSee you there!`,
+        category: 'ticket_confirmation',
+      }),
+    });
+  } catch (_e) {
+    // swallow — email is best-effort
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
@@ -116,6 +144,16 @@ Deno.serve(async (req) => {
         p_order_id: order.id,
       });
       if (issErr) return json({ error: issErr.message }, 400);
+
+      // confirmation email (best-effort)
+      const { data: ev } = await supabase.from('tk_events').select('name').eq('id', event_id).single();
+      const { data: cl } = await supabase.from('clubs').select('name').eq('id', club_id).single();
+      await sendTicketEmail({
+        clubId: club_id, to: buyer.email,
+        eventName: ev?.name ?? 'your event', clubName: cl?.name ?? 'your club',
+        confirmUrl: success_url ? `${success_url}?order=${order.id}` : '',
+      });
+
       return json({ order_id: order.id });
     }
 

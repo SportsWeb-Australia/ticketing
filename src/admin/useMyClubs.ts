@@ -5,11 +5,13 @@ export interface Club {
   id: string; name: string; slug: string | null;
   primary_colour: string | null; logo_url: string | null;
 }
+export type ClubRole = 'admin' | 'manager' | 'scanner' | null;
 const KEY = 'tk_admin_club';
 
 export function useMyClubs() {
   const [clubs, setClubs] = useState<Club[]>([]);
   const [clubId, setClubIdState] = useState<string | null>(localStorage.getItem(KEY));
+  const [role, setRole] = useState<ClubRole>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -26,29 +28,36 @@ export function useMyClubs() {
       setLoading(false);
     };
 
-    // Only query once we actually have an auth session — otherwise tk_my_clubs
-    // runs as anon (auth.uid() null) and wrongly returns zero clubs.
     const fetchClubs = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) { if (active) { setClubs([]); setLoading(false); } return; }
       if (active) setLoading(true);
+      // Activate any pending staff invites for this email before we read clubs.
+      await supabase.rpc('tk_claim_staff');
       const { data } = await supabase.rpc('tk_my_clubs');
       apply((data ?? []) as Club[]);
     };
 
     fetchClubs();
-
-    // Re-fetch the moment the session is established (fixes first-login race)
-    // or cleared on sign-out.
     const { data: sub } = supabase.auth.onAuthStateChange((_evt, session) => {
       if (session) fetchClubs();
-      else if (active) { setClubs([]); setLoading(false); }
+      else if (active) { setClubs([]); setRole(null); setLoading(false); }
     });
-
     return () => { active = false; sub.subscription.unsubscribe(); };
   }, []);
 
+  // Resolve the caller's role for whichever club is active.
+  useEffect(() => {
+    let active = true;
+    if (!clubId) { setRole(null); return; }
+    (async () => {
+      const { data } = await supabase.rpc('tk_my_role', { p_club_id: clubId });
+      if (active) setRole((data as ClubRole) ?? null);
+    })();
+    return () => { active = false; };
+  }, [clubId]);
+
   const setClubId = (id: string) => { setClubIdState(id); localStorage.setItem(KEY, id); };
   const club = clubs.find((c) => c.id === clubId) ?? null;
-  return { clubs, club, clubId, setClubId, loading };
+  return { clubs, club, clubId, setClubId, role, loading };
 }

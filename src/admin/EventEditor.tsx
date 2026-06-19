@@ -35,13 +35,13 @@ type Tab = 'details' | 'tickets' | 'look' | 'payments' | 'report';
 /* ---------------- entry ---------------- */
 export default function EventEditor() {
   return <RequireAdmin render={(ctx) => (
-    <AdminShell club={ctx.club} clubs={ctx.clubs} onClub={ctx.setClubId}>
-      <Inner clubId={ctx.clubId!} />
+    <AdminShell club={ctx.club} clubs={ctx.clubs} onClub={ctx.setClubId} role={ctx.role}>
+      <Inner clubId={ctx.clubId!} role={ctx.role} />
     </AdminShell>
   )} />;
 }
 
-function Inner({ clubId }: { clubId: string }) {
+function Inner({ clubId, role }: { clubId: string; role: 'admin' | 'manager' | 'scanner' | null }) {
   const { eventId } = useParams();
   const isNew = !eventId;
   const nav = useNavigate();
@@ -64,6 +64,7 @@ function Inner({ clubId }: { clubId: string }) {
   const [isFree, setIsFree] = useState(false);
   const [brandColor, setBrandColor] = useState('#1f6feb');
   const [logoUrl, setLogoUrl] = useState('');
+  const [coverUrl, setCoverUrl] = useState('');
 
   const [types, setTypes] = useState<TType[]>([]);
 
@@ -79,6 +80,7 @@ function Inner({ clubId }: { clubId: string }) {
         setStatus(e.status); setIsFree(e.is_free);
         setBrandColor(e.ticket_template?.brandColor ?? '#1f6feb');
         setLogoUrl(e.ticket_template?.logoUrl ?? '');
+        setCoverUrl(e.cover_image_url ?? '');
       }
       const { data: tt } = await supabase.from('tk_ticket_types')
         .select('*').eq('event_id', eventId).order('sort_order');
@@ -111,7 +113,8 @@ function Inner({ clubId }: { clubId: string }) {
         description: description || null, venue_name: venueName || null, venue_address: venueAddress || null,
         starts_at: fromLocal(startsAt), ends_at: fromLocal(endsAt),
         capacity: capacity ? parseInt(capacity, 10) : null,
-        status: effStatus, is_free: isFree, ticket_template: template, updated_at: new Date().toISOString(),
+        status: effStatus, is_free: isFree, ticket_template: template,
+        cover_image_url: coverUrl || null, updated_at: new Date().toISOString(),
       };
 
       let id = eventId as string | undefined;
@@ -159,7 +162,10 @@ function Inner({ clubId }: { clubId: string }) {
 
   if (loading) return <p className="text-slate-500">Loading…</p>;
 
-  const tabs: Tab[] = isNew ? ['details', 'tickets', 'look'] : ['details', 'tickets', 'look', 'payments', 'report'];
+  const tabs: Tab[] = isNew
+    ? ['details', 'tickets', 'look']
+    : (['details', 'tickets', 'look', 'payments', 'report'] as Tab[])
+        .filter((t) => t !== 'payments' || role === 'admin');
 
   return (
     <div>
@@ -278,7 +284,11 @@ function Inner({ clubId }: { clubId: string }) {
               <input value={brandColor} onChange={(e) => setBrandColor(e.target.value)} className={inp} />
             </div>
           </Field>
-          <LogoUpload clubId={clubId} logoUrl={logoUrl} setLogoUrl={setLogoUrl} />
+          <ImageUpload clubId={clubId} label="Logo (shown on ticket + page)"
+            value={logoUrl} setValue={setLogoUrl} />
+          <ImageUpload clubId={clubId} label="Event image / promo graphic" preview="wide"
+            value={coverUrl} setValue={setCoverUrl}
+            hint="Shown as the banner at the top of the event page, above the map." />
           <p className="text-xs text-slate-400">Leave the colour as your club’s primary colour for white-label tickets.</p>
         </Card>
       )}
@@ -444,8 +454,13 @@ function Report({ eventId, clubId, slug, name }: { eventId: string; clubId: stri
   );
 }
 
-/* ---------------- logo upload ---------------- */
-function LogoUpload({ clubId, logoUrl, setLogoUrl }: { clubId: string; logoUrl: string; setLogoUrl: (v: string) => void }) {
+/* ---------------- image upload (logo / cover) ---------------- */
+function ImageUpload({
+  clubId, label, value, setValue, hint, preview = 'square',
+}: {
+  clubId: string; label: string; value: string; setValue: (v: string) => void;
+  hint?: string; preview?: 'square' | 'wide';
+}) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -454,10 +469,10 @@ function LogoUpload({ clubId, logoUrl, setLogoUrl }: { clubId: string; logoUrl: 
     e.target.value = ''; // allow re-selecting the same file
     if (!file) return;
     if (!/^image\//.test(file.type)) { setErr('Please choose an image file.'); return; }
-    if (file.size > 3 * 1024 * 1024) { setErr('Image must be under 3 MB.'); return; }
+    if (file.size > 5 * 1024 * 1024) { setErr('Image must be under 5 MB.'); return; }
     setBusy(true); setErr(null);
     const ext = (file.name.split('.').pop() || 'png').toLowerCase().replace(/[^a-z0-9]/g, '');
-    const path = `${clubId}/${Date.now()}.${ext}`;
+    const path = `${clubId}/${Date.now()}-${Math.random().toString(36).slice(2, 7)}.${ext}`;
     const { error } = await supabase.storage.from('tk-logos').upload(path, file, { upsert: true, contentType: file.type });
     if (error) {
       setErr(/bucket not found/i.test(error.message) ? 'Storage not set up yet — run the tk-logos bucket SQL.' : error.message);
@@ -465,24 +480,31 @@ function LogoUpload({ clubId, logoUrl, setLogoUrl }: { clubId: string; logoUrl: 
       return;
     }
     const { data } = supabase.storage.from('tk-logos').getPublicUrl(path);
-    setLogoUrl(data.publicUrl);
+    setValue(data.publicUrl);
     setBusy(false);
   };
 
   return (
     <div>
-      <span className="mb-1 block text-xs font-medium text-slate-500">Logo (shown on ticket + page)</span>
-      {logoUrl && (
-        <img src={logoUrl} alt="" className="mb-2 h-16 w-16 rounded-lg border border-slate-200 bg-white object-contain p-1" />
+      <span className="mb-1 block text-xs font-medium text-slate-500">{label}</span>
+      {value && (
+        <img
+          src={value}
+          alt=""
+          className={preview === 'wide'
+            ? 'mb-2 h-28 w-full rounded-lg border border-slate-200 bg-white object-cover'
+            : 'mb-2 h-16 w-16 rounded-lg border border-slate-200 bg-white object-contain p-1'}
+        />
       )}
       <div className="flex items-center gap-3">
         <label className="cursor-pointer rounded-lg border border-slate-300 px-3 py-2 text-sm hover:border-brand-orange">
-          {busy ? 'Uploading…' : logoUrl ? 'Replace logo' : 'Upload logo'}
+          {busy ? 'Uploading…' : value ? 'Replace image' : 'Upload image'}
           <input type="file" accept="image/*" className="hidden" onChange={onFile} disabled={busy} />
         </label>
-        {logoUrl && <button onClick={() => setLogoUrl('')} className="text-sm text-red-500">Remove</button>}
+        {value && <button onClick={() => setValue('')} className="text-sm text-red-500">Remove</button>}
       </div>
-      <input value={logoUrl} onChange={(e) => setLogoUrl(e.target.value)} className={`${inp} mt-2`} placeholder="…or paste an image URL" />
+      <input value={value} onChange={(e) => setValue(e.target.value)} className={`${inp} mt-2`} placeholder="…or paste an image URL" />
+      {hint && <p className="mt-1 text-xs text-slate-400">{hint}</p>}
       {err && <p className="mt-1 text-sm text-red-500">{err}</p>}
     </div>
   );

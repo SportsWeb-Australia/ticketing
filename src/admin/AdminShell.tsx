@@ -7,12 +7,13 @@ import Login from '../scanner/Login';
 import { useMyClubs, type Club } from './useMyClubs';
 
 export default function AdminShell({
-  children, club, clubs, onClub,
+  children, club, clubs, onClub, role,
 }: {
   children: ReactNode;
   club: Club | null;
   clubs: Club[];
   onClub: (id: string) => void;
+  role?: 'admin' | 'manager' | 'scanner' | null;
 }) {
   return (
     <div className="min-h-screen bg-brand-mist">
@@ -23,6 +24,9 @@ export default function AdminShell({
             <span className="text-sm font-medium text-slate-400">Admin</span>
           </Link>
           <div className="flex items-center gap-3">
+            {role === 'admin' && (
+              <Link to="/admin/staff" className="text-sm text-slate-500 hover:text-brand-orange">Staff</Link>
+            )}
             {clubs.length > 1 ? (
               <select
                 value={club?.id ?? ''} onChange={(e) => onClub(e.target.value)}

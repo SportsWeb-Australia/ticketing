@@ -8,6 +8,7 @@ import ScannerHome from './scanner/ScannerHome';
 import ScanEvent from './scanner/ScanEvent';
 import EventsList from './admin/EventsList';
 import EventEditor from './admin/EventEditor';
+import AdminStaff from './admin/AdminStaff';
 import { resolveClubIdBySlug } from './lib/club';
 
 // /e/:eventId — works with zero assumptions about the clubs table.
@@ -50,6 +51,7 @@ export default function App() {
 
       {/* club admin */}
       <Route path="/admin" element={<EventsList />} />
+      <Route path="/admin/staff" element={<AdminStaff />} />
       <Route path="/admin/new" element={<EventEditor />} />
       <Route path="/admin/e/:eventId" element={<EventEditor />} />
     </Routes>

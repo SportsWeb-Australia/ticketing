@@ -17,7 +17,7 @@ const badge: Record<string, string> = {
 
 export default function EventsList() {
   return <RequireAdmin render={(ctx) => (
-    <AdminShell club={ctx.club} clubs={ctx.clubs} onClub={ctx.setClubId}>
+    <AdminShell club={ctx.club} clubs={ctx.clubs} onClub={ctx.setClubId} role={ctx.role}>
       <Inner clubId={ctx.clubId!} />
     </AdminShell>
   )} />;

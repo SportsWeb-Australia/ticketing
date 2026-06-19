@@ -26,6 +26,33 @@ const supabase = createClient(
 const cryptoProvider = Stripe.createSubtleCryptoProvider();
 const webhookSecret = Deno.env.get('STRIPE_WEBHOOK_SECRET')!;
 
+// Buyer ticket-link email via the shared SportsWeb One notify endpoint.
+async function sendTicketEmail(opts: {
+  clubId: string; to: string; eventName: string; clubName: string; confirmUrl: string;
+}) {
+  const secret = Deno.env.get('VM_WEBHOOK_SECRET');
+  if (!secret || !opts.to) return;
+  try {
+    await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/notify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-webhook-secret': secret },
+      body: JSON.stringify({
+        club_id: opts.clubId,
+        channel: 'email',
+        to: opts.to,
+        subject: `Your tickets — ${opts.eventName}`,
+        body:
+          `Thanks for your order with ${opts.clubName}.\n\n` +
+          `Your tickets for ${opts.eventName} are ready. Open this link on your phone ` +
+          `and show the QR code at the gate:\n\n${opts.confirmUrl}\n\nSee you there!`,
+        category: 'ticket_confirmation',
+      }),
+    });
+  } catch (_e) {
+    // best-effort
+  }
+}
+
 Deno.serve(async (req) => {
   const sig = req.headers.get('stripe-signature');
   const body = await req.text();
@@ -52,8 +79,10 @@ Deno.serve(async (req) => {
         const session = event.data.object as Stripe.Checkout.Session;
         const orderId = session.metadata?.order_id;
         if (orderId) {
-          // transition only from pending -> paid (idempotent on replays)
-          await supabase
+          // transition only from pending -> paid (idempotent on replays).
+          // The returned rows tell us if THIS call did the transition, so we
+          // email exactly once even when Stripe retries the webhook.
+          const { data: transitioned } = await supabase
             .from('tk_orders')
             .update({
               status: 'paid',
@@ -63,10 +92,24 @@ Deno.serve(async (req) => {
               stripe_checkout_session_id: session.id,
             })
             .eq('id', orderId)
-            .eq('status', 'pending');
+            .eq('status', 'pending')
+            .select('club_id, event_id, buyer_email');
 
           // issuance is itself idempotent (guards on existing tickets)
           await supabase.rpc('tk_issue_tickets', { p_order_id: orderId });
+
+          if (transitioned && transitioned.length) {
+            const ord = transitioned[0] as { club_id: string; event_id: string; buyer_email: string | null };
+            const { data: ev } = await supabase.from('tk_events').select('name').eq('id', ord.event_id).single();
+            const { data: cl } = await supabase.from('clubs').select('name').eq('id', ord.club_id).single();
+            await sendTicketEmail({
+              clubId: ord.club_id,
+              to: session.customer_email ?? session.customer_details?.email ?? ord.buyer_email ?? '',
+              eventName: ev?.name ?? 'your event',
+              clubName: cl?.name ?? 'your club',
+              confirmUrl: session.success_url ?? '',
+            });
+          }
         }
         break;
       }
