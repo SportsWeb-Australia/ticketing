@@ -210,6 +210,20 @@ export default function EventSalesPage({ eventId, slug, clubId, embed = false }:
       </div>
     );
 
+  // Past events auto-close: a direct link to a finished event shows a clean
+  // "ended" state rather than a buyable cart. (Listings/embeds drop them entirely.)
+  const ended = event.ends_at ? Date.now() > Date.parse(event.ends_at) : false;
+  if (ended)
+    return (
+      <div className={`${embed ? '' : 'min-h-screen'} flex items-center justify-center bg-slate-50 p-10 text-center`}>
+        <div>
+          {logo && <img src={logo} alt="" className="mx-auto mb-4 h-14 w-14 rounded-lg bg-white object-contain p-1 shadow" />}
+          <h1 className="text-xl font-semibold text-slate-800">{event.name}</h1>
+          <p className="mt-2 text-slate-500">This event has ended — tickets are no longer on sale.</p>
+        </div>
+      </div>
+    );
+
   const dateLabel = event.starts_at
     ? new Intl.DateTimeFormat('en-AU', {
         weekday: 'short',

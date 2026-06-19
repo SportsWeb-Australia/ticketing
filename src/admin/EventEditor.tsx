@@ -1,8 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import QRCode from 'react-qr-code';
 import { supabase } from '../lib/supabase';
 import AdminShell, { RequireAdmin } from './AdminShell';
+
+const TAB_LABELS: Record<Tab, string> = {
+  details: 'Details', tickets: 'Tickets', look: 'Ticket Design', payments: 'Payments', report: 'Report',
+};
 
 /* ---------------- helpers ---------------- */
 const slugify = (s: string) =>
@@ -93,7 +98,8 @@ function Inner({ clubId }: { clubId: string }) {
     setTypes((t) => t.map((x, idx) => (idx === i ? { ...x, ...p } : x)));
   const removeType = (i: number) => setTypes((t) => t.filter((_, idx) => idx !== i));
 
-  const save = async () => {
+  const save = async (statusOverride?: string) => {
+    const effStatus = statusOverride ?? status;
     setSaving(true); setMsg(null);
     try {
       const { data: u } = await supabase.auth.getUser();
@@ -103,7 +109,7 @@ function Inner({ clubId }: { clubId: string }) {
         description: description || null, venue_name: venueName || null, venue_address: venueAddress || null,
         starts_at: fromLocal(startsAt), ends_at: fromLocal(endsAt),
         capacity: capacity ? parseInt(capacity, 10) : null,
-        status, is_free: isFree, ticket_template: template, updated_at: new Date().toISOString(),
+        status: effStatus, is_free: isFree, ticket_template: template, updated_at: new Date().toISOString(),
       };
 
       let id = eventId as string | undefined;
@@ -139,7 +145,8 @@ function Inner({ clubId }: { clubId: string }) {
         }
       }
 
-      setMsg('Saved ✓');
+      if (statusOverride) setStatus(statusOverride);
+      setMsg(statusOverride === 'published' ? 'Published ✓' : statusOverride === 'draft' ? 'Unpublished' : 'Saved ✓');
       if (isNew && id) nav(`/admin/e/${id}`, { replace: true });
     } catch (e: any) {
       setMsg(e.message || 'Save failed');
@@ -158,7 +165,19 @@ function Inner({ clubId }: { clubId: string }) {
         <button onClick={() => nav('/admin')} className="text-sm text-slate-400">‹ Events</button>
         <div className="flex items-center gap-3">
           {msg && <span className="text-sm text-slate-500">{msg}</span>}
-          <button onClick={save} disabled={saving || !name.trim()}
+          {!isNew && status !== 'published' && (
+            <button onClick={() => save('published')} disabled={saving || !name.trim()}
+              className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40">
+              {saving ? 'Working…' : 'Publish'}
+            </button>
+          )}
+          {!isNew && status === 'published' && (
+            <button onClick={() => save('draft')} disabled={saving}
+              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-600 disabled:opacity-40">
+              Unpublish
+            </button>
+          )}
+          <button onClick={() => save()} disabled={saving || !name.trim()}
             className="rounded-lg bg-brand-orange px-4 py-2 text-sm font-semibold text-white disabled:opacity-40">
             {saving ? 'Saving…' : 'Save'}
           </button>
@@ -168,8 +187,8 @@ function Inner({ clubId }: { clubId: string }) {
       <div className="mb-5 flex gap-1 border-b border-slate-200">
         {tabs.map((t) => (
           <button key={t} onClick={() => setTab(t)}
-            className={`px-3 py-2 text-sm capitalize ${tab === t ? 'border-b-2 border-brand-orange font-semibold text-slate-800' : 'text-slate-400'}`}>
-            {t}
+            className={`px-3 py-2 text-sm ${tab === t ? 'border-b-2 border-brand-orange font-semibold text-slate-800' : 'text-slate-400'}`}>
+            {TAB_LABELS[t]}
           </button>
         ))}
       </div>
@@ -243,12 +262,12 @@ function Inner({ clubId }: { clubId: string }) {
             </div>
           </Field>
           <Field label="Logo URL (shown on ticket + page)"><input value={logoUrl} onChange={(e) => setLogoUrl(e.target.value)} className={inp} placeholder="https://…/club-logo.png" /></Field>
-          <p className="text-xs text-slate-400">Leave the colour as your club’s primary colour for white-label tickets. Ticket One stays a discreet footer credit.</p>
+          <p className="text-xs text-slate-400">Leave the colour as your club’s primary colour for white-label tickets.</p>
         </Card>
       )}
 
       {tab === 'payments' && !isNew && <Payments clubId={clubId} isFree={isFree} />}
-      {tab === 'report' && !isNew && <Report eventId={eventId!} clubId={clubId} slug={slug} />}
+      {tab === 'report' && !isNew && <Report eventId={eventId!} clubId={clubId} slug={slug} name={name} />}
     </div>
   );
 }
@@ -303,12 +322,14 @@ function Payments({ clubId, isFree }: { clubId: string; isFree: boolean }) {
 }
 
 /* ---------------- report ---------------- */
-function Report({ eventId, clubId, slug }: { eventId: string; clubId: string; slug: string }) {
+function Report({ eventId, clubId, slug, name }: { eventId: string; clubId: string; slug: string; name: string }) {
   const [s, setS] = useState<any>(null);
   const [fee, setFee] = useState<any>(null);
+  const qrWrap = useRef<HTMLDivElement>(null);
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const link = `${origin}/e/${eventId}`;
   const embed = `<iframe src="${origin}/e/${eventId}?embed=1" style="width:100%;border:0" title="Tickets"></iframe>`;
+  const title = name || 'Get your tickets';
 
   useEffect(() => {
     (async () => {
@@ -320,6 +341,31 @@ function Report({ eventId, clubId, slug }: { eventId: string; clubId: string; sl
   }, [eventId, clubId]);
 
   const copy = (t: string) => navigator.clipboard?.writeText(t);
+
+  const shares = [
+    { label: 'Facebook', href: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(link)}` },
+    { label: 'X', href: `https://twitter.com/intent/tweet?text=${encodeURIComponent(title)}&url=${encodeURIComponent(link)}` },
+    { label: 'WhatsApp', href: `https://wa.me/?text=${encodeURIComponent(`${title} ${link}`)}` },
+    { label: 'Email', href: `mailto:?subject=${encodeURIComponent(title)}&body=${encodeURIComponent(link)}` },
+  ];
+  const nativeShare = () => (navigator as any).share?.({ title, url: link }).catch(() => {});
+
+  const downloadQR = () => {
+    const svg = qrWrap.current?.querySelector('svg');
+    if (!svg) return;
+    const xml = new XMLSerializer().serializeToString(svg);
+    const img = new Image();
+    img.onload = () => {
+      const size = 720, c = document.createElement('canvas');
+      c.width = size; c.height = size;
+      const ctx = c.getContext('2d')!;
+      ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, size, size);
+      ctx.drawImage(img, 60, 60, size - 120, size - 120);
+      const a = document.createElement('a');
+      a.href = c.toDataURL('image/png'); a.download = `${slug || 'event'}-qr.png`; a.click();
+    };
+    img.src = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(xml)))}`;
+  };
 
   return (
     <div className="space-y-4">
@@ -347,7 +393,31 @@ function Report({ eventId, clubId, slug }: { eventId: string; clubId: string; sl
           <input readOnly value={link} className={`${inp} text-slate-500`} />
           <button onClick={() => copy(link)} className="rounded-lg border border-slate-300 px-3 text-sm">Copy</button>
         </div>
-        <p className="mt-3 text-xs text-slate-400">Embed (auto-resizing iframe)</p>
+
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          {shares.map((sh) => (
+            <a key={sh.label} href={sh.href} target="_blank" rel="noreferrer"
+              className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:border-brand-orange">
+              {sh.label}
+            </a>
+          ))}
+          {typeof navigator !== 'undefined' && (navigator as any).share && (
+            <button onClick={nativeShare} className="rounded-lg bg-brand-graphite px-3 py-1.5 text-sm font-semibold text-white">Share…</button>
+          )}
+        </div>
+
+        <div className="mt-5 flex items-center gap-4 border-t border-slate-100 pt-4">
+          <div ref={qrWrap} className="rounded-lg border border-slate-200 bg-white p-2">
+            <QRCode value={link} size={108} />
+          </div>
+          <div>
+            <p className="text-sm font-medium text-slate-700">Event QR code</p>
+            <p className="text-xs text-slate-400">Print it on posters or flyers — scanning opens the ticket page.</p>
+            <button onClick={downloadQR} className="mt-2 rounded-lg border border-slate-300 px-3 py-1.5 text-sm">Download QR (PNG)</button>
+          </div>
+        </div>
+
+        <p className="mt-5 text-xs text-slate-400">Embed (auto-resizing iframe)</p>
         <div className="mt-1 flex gap-2">
           <input readOnly value={embed} className={`${inp} text-slate-500`} />
           <button onClick={() => copy(embed)} className="rounded-lg border border-slate-300 px-3 text-sm">Copy</button>

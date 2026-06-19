@@ -13,17 +13,39 @@ export function useMyClubs() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    (async () => {
-      const { data } = await supabase.rpc('tk_my_clubs');
-      const list = (data ?? []) as Club[];
+    let active = true;
+
+    const apply = (list: Club[]) => {
+      if (!active) return;
       setClubs(list);
-      if (list.length && !list.find((c) => c.id === clubId)) {
-        setClubIdState(list[0].id);
-        localStorage.setItem(KEY, list[0].id);
-      }
+      setClubIdState((cur) => {
+        const next = list.find((c) => c.id === cur) ? cur : (list[0]?.id ?? null);
+        if (next) localStorage.setItem(KEY, next);
+        return next;
+      });
       setLoading(false);
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    };
+
+    // Only query once we actually have an auth session — otherwise tk_my_clubs
+    // runs as anon (auth.uid() null) and wrongly returns zero clubs.
+    const fetchClubs = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) { if (active) { setClubs([]); setLoading(false); } return; }
+      if (active) setLoading(true);
+      const { data } = await supabase.rpc('tk_my_clubs');
+      apply((data ?? []) as Club[]);
+    };
+
+    fetchClubs();
+
+    // Re-fetch the moment the session is established (fixes first-login race)
+    // or cleared on sign-out.
+    const { data: sub } = supabase.auth.onAuthStateChange((_evt, session) => {
+      if (session) fetchClubs();
+      else if (active) { setClubs([]); setLoading(false); }
+    });
+
+    return () => { active = false; sub.subscription.unsubscribe(); };
   }, []);
 
   const setClubId = (id: string) => { setClubIdState(id); localStorage.setItem(KEY, id); };
