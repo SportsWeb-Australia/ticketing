@@ -5,10 +5,13 @@ import QRCode from 'react-qr-code';
 import { supabase } from '../lib/supabase';
 import { renderMarkdown } from '../lib/markdown';
 import VenueField from './VenueField';
+import Attendance from './Attendance';
+import { Bars } from './Charts';
 import AdminShell, { RequireAdmin } from './AdminShell';
 
 const TAB_LABELS: Record<Tab, string> = {
-  details: 'Details', tickets: 'Tickets', look: 'Ticket Design', payments: 'Payments', report: 'Report',
+  details: 'Details', tickets: 'Tickets', look: 'Ticket Design', payments: 'Payments',
+  report: 'Report', attendance: 'Attendance',
 };
 
 /* ---------------- helpers ---------------- */
@@ -30,7 +33,7 @@ interface TType {
   quantity_total: string; max_per_order: string;
   quantity_sold: number; is_active: boolean; sort_order: number;
 }
-type Tab = 'details' | 'tickets' | 'look' | 'payments' | 'report';
+type Tab = 'details' | 'tickets' | 'look' | 'payments' | 'report' | 'attendance';
 
 /* ---------------- entry ---------------- */
 export default function EventEditor() {
@@ -164,7 +167,7 @@ function Inner({ clubId, role }: { clubId: string; role: 'admin' | 'manager' | '
 
   const tabs: Tab[] = isNew
     ? ['details', 'tickets', 'look']
-    : (['details', 'tickets', 'look', 'payments', 'report'] as Tab[])
+    : (['details', 'tickets', 'look', 'payments', 'report', 'attendance'] as Tab[])
         .filter((t) => t !== 'payments' || role === 'admin');
 
   return (
@@ -300,6 +303,7 @@ function Inner({ clubId, role }: { clubId: string; role: 'admin' | 'manager' | '
           <GateCodes eventId={eventId!} clubId={clubId} role={role} />
         </div>
       )}
+      {tab === 'attendance' && !isNew && <Attendance eventId={eventId!} />}
     </div>
   );
 }
@@ -357,6 +361,7 @@ function Payments({ clubId, isFree }: { clubId: string; isFree: boolean }) {
 function Report({ eventId, clubId, slug, name }: { eventId: string; clubId: string; slug: string; name: string }) {
   const [s, setS] = useState<any>(null);
   const [fee, setFee] = useState<any>(null);
+  const [trend, setTrend] = useState<{ label: string; value: number }[]>([]);
   const qrWrap = useRef<HTMLDivElement>(null);
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const link = `${origin}/e/${eventId}`;
@@ -369,6 +374,24 @@ function Report({ eventId, clubId, slug, name }: { eventId: string; clubId: stri
       setS(data);
       const { data: f } = await supabase.rpc('tk_fee_for_club', { p_club_id: clubId });
       setFee(Array.isArray(f) ? f[0] : f);
+
+      // revenue collected per day (paid orders)
+      const { data: orders } = await supabase
+        .from('tk_orders')
+        .select('paid_at,total_cents,status')
+        .eq('event_id', eventId)
+        .eq('status', 'paid');
+      const byDay = new Map<string, { label: string; value: number }>();
+      for (const o of orders ?? []) {
+        if (!o.paid_at) continue;
+        const d = new Date(o.paid_at);
+        const iso = d.toISOString().slice(0, 10);
+        const label = d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+        const cur = byDay.get(iso) ?? { label, value: 0 };
+        cur.value += o.total_cents ?? 0;
+        byDay.set(iso, cur);
+      }
+      setTrend([...byDay.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([, v]) => v));
     })();
   }, [eventId, clubId]);
 
@@ -417,6 +440,17 @@ function Report({ eventId, clubId, slug, name }: { eventId: string; clubId: stri
           </p>
         )}
       </Card>
+
+      {trend.length > 0 && (
+        <Card>
+          <h2 className="mb-2 font-semibold text-slate-800">Sales over time</h2>
+          <Bars data={trend} valueFmt={(v) => fmt(v)} />
+          <div className="mt-1 flex justify-between text-xs text-slate-400">
+            <span>{trend[0].label}</span>
+            <span>{trend[trend.length - 1].label}</span>
+          </div>
+        </Card>
+      )}
 
       <Card>
         <h2 className="mb-3 font-semibold text-slate-800">Share</h2>
