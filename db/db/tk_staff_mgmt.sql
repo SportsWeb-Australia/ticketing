@@ -90,6 +90,9 @@ end;
 $$;
 
 -- ---- scan codes are event-specific now ------------------------------
+-- (drop first: we're removing the default on p_event_id, which CREATE OR
+--  REPLACE cannot do.)
+drop function if exists tk_create_scan_code(uuid, uuid, text);
 create or replace function tk_create_scan_code(p_club_id uuid, p_event_id uuid, p_label text default 'Gate')
 returns text language plpgsql security definer set search_path = public, extensions
 as $$

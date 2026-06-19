@@ -119,24 +119,48 @@ export default function ConfirmPage() {
               Save or screenshot this screen and show the QR at the gate.
             </p>
 
-            <div className="mt-5 space-y-4">
+            <div className="mt-5 space-y-5">
               {data.tickets.map((t) => (
-                <div key={t.id} className="overflow-hidden rounded-2xl bg-white shadow-sm">
-                  <div className="h-1.5 w-full" style={{ backgroundColor: accent }} />
+                <div key={t.id} className="relative overflow-hidden rounded-2xl bg-white shadow-md">
+                  {/* brand band */}
+                  <div className="px-5 py-4 text-white" style={{ backgroundColor: accent }}>
+                    <p className="text-[11px] font-medium uppercase tracking-wide opacity-80">
+                      {data.event?.name}
+                    </p>
+                    <p className="mt-0.5 text-lg font-bold leading-tight">{t.type}</p>
+                    {(dateLabel || data.event?.venue_name) && (
+                      <p className="mt-0.5 text-xs opacity-90">
+                        {dateLabel}
+                        {dateLabel && data.event?.venue_name ? ' · ' : ''}
+                        {data.event?.venue_name}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* perforation */}
+                  <div className="relative">
+                    <div className="absolute -left-3 top-1/2 h-6 w-6 -translate-y-1/2 rounded-full bg-brand-mist" />
+                    <div className="absolute -right-3 top-1/2 h-6 w-6 -translate-y-1/2 rounded-full bg-brand-mist" />
+                    <div className="mx-5 border-t-2 border-dashed border-slate-200" />
+                  </div>
+
+                  {/* body */}
                   <div className="flex items-center gap-4 p-5">
-                    <div className="shrink-0 rounded-lg bg-white p-1">
-                      <QRCode value={t.qr} size={104} />
+                    <div className="shrink-0 rounded-lg border border-slate-100 bg-white p-2">
+                      <QRCode value={t.qr} size={118} />
                     </div>
                     <div className="min-w-0">
-                      <p className="font-semibold text-brand-graphite">{t.type}</p>
                       {t.holder_name && (
-                        <p className="text-sm text-slate-600">{t.holder_name}</p>
+                        <p className="truncate font-semibold text-brand-graphite">{t.holder_name}</p>
                       )}
-                      <p className="mt-1 font-mono text-xs text-slate-400">
-                        #{String(t.serial_no).padStart(4, '0')}
+                      <p className="text-sm text-slate-500">{t.type}</p>
+                      <p className="mt-2 font-mono text-[11px] uppercase tracking-wide text-slate-400">
+                        Ticket #{String(t.serial_no).padStart(4, '0')}
                       </p>
                       {t.status !== 'valid' && (
-                        <p className="mt-1 text-xs font-medium text-amber-600">{t.status}</p>
+                        <span className="mt-1 inline-block rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-700">
+                          {t.status}
+                        </span>
                       )}
                     </div>
                   </div>
