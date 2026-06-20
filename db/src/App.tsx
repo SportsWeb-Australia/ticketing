@@ -8,6 +8,7 @@ import ScannerHome from './scanner/ScannerHome';
 import ScanEvent from './scanner/ScanEvent';
 import CodeScan from './scanner/CodeScan';
 import EventsList from './admin/EventsList';
+import ClubDashboard from './admin/ClubDashboard';
 import EventEditor from './admin/EventEditor';
 import AdminStaff from './admin/AdminStaff';
 import { resolveClubIdBySlug } from './lib/club';
@@ -52,7 +53,8 @@ export default function App() {
       <Route path="/scan/:eventId" element={<ScanEvent />} />
 
       {/* club admin */}
-      <Route path="/admin" element={<EventsList />} />
+      <Route path="/admin" element={<ClubDashboard />} />
+      <Route path="/admin/events" element={<EventsList />} />
       <Route path="/admin/staff" element={<AdminStaff />} />
       <Route path="/admin/new" element={<EventEditor />} />
       <Route path="/admin/e/:eventId" element={<EventEditor />} />

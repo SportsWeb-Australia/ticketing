@@ -24,6 +24,7 @@ export default function AdminShell({
             <span className="text-sm font-medium text-slate-400">Admin</span>
           </Link>
           <div className="flex items-center gap-3">
+            <Link to="/admin/events" className="text-sm text-slate-500 hover:text-brand-orange">Events</Link>
             {role === 'admin' && (
               <Link to="/admin/staff" className="text-sm text-slate-500 hover:text-brand-orange">Staff</Link>
             )}
